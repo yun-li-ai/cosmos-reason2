@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Placeholders are filled by scripts/critique_generated_video.py (string.Template).
+user_prompt: |
+  You are a critical reviewer of synthetic video from a controllable generation system (e.g. Cosmos Transfer multiview). Conditioning includes per-camera control videos (bounding boxes, map lanes) and a text prompt; outputs are generated videos per camera.
+
+  **Generation prompt:**
+  $generation_prompt
+
+  **What you are shown (video order in this message):**
+  $media_layout
+
+  $optional_notes
+
+  Watch every attached video and write a structured critique. Use clear markdown headings.
+
+  ## Prompt alignment
+  How well do the generated outputs match the generation prompt across cameras? Note missing elements, wrong attributes, or contradictions.
+
+  ## Control fidelity
+  When control videos are provided: for each camera, compare the generated clip to its paired control stream (boxes, lanes, layout). Is geometry and motion consistent with the controls? Are there cross-camera inconsistencies? If only a single output video was supplied without controls, say so briefly and focus on internal consistency.
+
+  ## Temporal quality
+  Flicker, object identity drift, unnatural motion, physics or interaction plausibility across time (per view and overall).
+
+  ## Visual quality
+  Artifacts (banding, warping, texture crawl, hands/faces, text in scene), resolution and sharpness where relevant.
+
+  ## Summary verdict
+  2–4 sentences: overall quality, main strengths, main failures, and whether you would iterate the prompt or controls.
+
+  Be specific and reference what you see; avoid generic praise.

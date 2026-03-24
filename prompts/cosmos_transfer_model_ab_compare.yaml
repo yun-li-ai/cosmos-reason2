@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Filled by scripts/critique_compare_model_ab.py (string.Template).
+user_prompt: |
+  You are comparing synthetic multiview driving (or similar) video from **Cosmos Transfer 2.5** under **two model variants**, called **Model A** and **Model B** (neutral labels—do not assume which is baseline or fine-tuned). Both were generated with the **same text prompt** and the **same per-camera control videos** (bounding boxes, map lanes).
+
+  **Shared generation prompt:**
+  $generation_prompt
+
+  **What you are shown (video order in this message):**
+  $media_layout
+
+  $optional_notes
+
+  For **each camera view**, three consecutive clips form one triplet: **control**, then **Model A output**, then **Model B output**. Use that grouping for all analysis.
+
+  Write a structured report with the following markdown headings. Use **Model A** and **Model B** to refer to the two variants.
+
+
+  ## Head-to-head comparison (Model A vs Model B)
+  For **each** of the following axes, compare the two variants **directly**: state whether **Model A** or **Model B** is better and **why**. Call out specific camera views when differences are localized.
+
+  ### Prompt alignment
+  Which variant’s outputs better match the **shared text prompt** (weather, lighting, materials, mood, objects, actions)? Note omissions, exaggerations, or contradictions for each camera view.
+
+  ### Control fidelity
+  Which outputs better follow **boxes, map/lanes, and layout** implied by the control clips? Geometry, object placement, motion relative to controls, and agreement across camera views.
+
+  ### Temporal quality
+  Compare **motion coherence**, flicker, identity drift, physics plausibility, and interaction stability over time for each camera view.
+
+  ### Visual quality
+  Compare **sharpness**, texture stability, color/exposure, noise, and generative artifacts (warping, melting, banding, ghosting) for each camera view.
+
+  ### Cross-camera and semantic consistency
+  Do the seven views feel like **one world** (object continuity, relative motion, lighting)? Any semantic gains or regressions for either variant (e.g. readable signage, traffic state, road structure).
+
+  ### Atmosphere and fine detail
+  Weather effects, depth cues, reflections, and small details that sell the prompt—which variant handles them better, and where?
+
+  ## Other observations (optional)
+  Brief bullet list: any **additional** interesting differences (e.g. bias toward certain object classes, failure modes, rare views).
+
+  ## Summary verdict
+  overall recommendation (prefer Model A, prefer Model B, mixed, or iterate), main tradeoff, main risk. 
+
+  Be specific; avoid generic praise. Reference triplets and filenames where useful.

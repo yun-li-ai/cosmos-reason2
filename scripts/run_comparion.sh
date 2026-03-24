@@ -1,0 +1,5 @@
+python scripts/critique_compare_model_ab.py   --control-dir assets/inference_results/control_videos   --model-a-dir assets/inference_results/night_1   --model-b-dir assets/inference_results/night_2   --auto-multiview-json assets/inference_results/night_2/auto_multiview.json --output assets/inference_results/critique_results/night_2.md
+
+python scripts/critique_compare_model_ab.py   --control-dir assets/inference_results/control_videos   --model-a-dir assets/inference_results/snowy_1   --model-b-dir assets/inference_results/snowy_2   --auto-multiview-json assets/inference_results/snowy_2/auto_multiview.json --output assets/inference_results/critique_results/snowy_2.md
+
+python scripts/critique_compare_model_ab.py   --control-dir assets/inference_results/control_videos   --model-a-dir assets/inference_results/golden_hour_1   --model-b-dir assets/inference_results/golden_hour_2   --auto-multiview-json assets/inference_results/golden_hour_2/auto_multiview.json --output assets/inference_results/critique_results/golden_hour_2.md
