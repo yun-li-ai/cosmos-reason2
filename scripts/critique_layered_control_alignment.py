@@ -14,18 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Critique control–generated alignment from seven layered (control+gen) multiview clips.
 
+Example:
+    python3 scripts/critique_layered_control_alignment.py \
+        --layered-dir assets/overlay_output/b_trained_golden_hour \
+        --auto-multiview-json assets/inference_results/b_trained_golden_hour/auto_multiview.json \
+        --output assets/overlay_output/critique_results/critique_b_trained_golden_hour.md
 
-
-"""Compare two Cosmos Transfer multiview model outputs (Model A vs Model B) with Cosmos-Reason2.
-
-    python3 scripts/critique_compare_model_ab.py \
-    --control-dir assets/inference_results/control_videos \
-    --model-a-dir assets/inference_results/a_trained_snowy \
-    --model-b-dir assets/inference_results/b_trained_snowy \
-    --auto-multiview-json assets/inference_results/b_trained_snowy/auto_multiview.json \
-    --output assets/inference_results/critique_results/critique_snowy.md
-
+Layered videos are resolved like multiview outputs (see critique_generated_video), and by default
+also try stems with ``_overlay`` (e.g. ``FRONT_CENTER_overlay.mp4``). Override with ``--overlay-suffix``.
 """
 
 from __future__ import annotations
@@ -44,7 +42,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
-DEFAULT_TEMPLATE = ROOT / "prompts" / "cosmos_transfer_model_ab_compare.yaml"
+DEFAULT_TEMPLATE = ROOT / "prompts" / "cosmos_transfer_layered_control_alignment.yaml"
 
 
 def _load_critique_generated_video():
@@ -76,123 +74,166 @@ def load_user_prompt(
 
 
 def write_prompt_file(user_prompt: str) -> Path:
-    fd, path = tempfile.mkstemp(suffix=".yaml", prefix="critique_model_ab_", text=True)
+    fd, path = tempfile.mkstemp(suffix=".yaml", prefix="critique_layered_", text=True)
     os.close(fd)
     p = Path(path)
     p.write_text(yaml.safe_dump({"user_prompt": user_prompt}), encoding="utf-8")
     return p
 
 
-def build_media_layout_triplets(
-    rows: list[tuple[str, Path, Path, Path]],
-) -> str:
-    """rows: (view_key, control_path, model_a_path, model_b_path)."""
-    n = len(rows) * 3
+def build_media_layout_layered(rows: list[tuple[str, Path]]) -> str:
+    """rows: (view_key, layered_video_path)."""
+    n = len(rows)
     lines = [
-        f"There are **{n}** videos in **{len(rows)} triplets** (same camera order as Cosmos Transfer multiview).",
-        "Each triplet is: **(1) control** with boxes/lanes → **(2) Model A generated** → **(3) Model B generated**.",
+        f"There are **{n}** videos: **one layered clip per camera** (control graphics composited with generated video).",
+        "Watch in order; each file corresponds to a single multiview camera.",
         "",
     ]
-    v = 1
-    for view_key, cpath, path_a, path_b in rows:
-        lines.append(
-            f"**{view_key}** — video {v}: control `{cpath.name}`; "
-            f"video {v + 1}: Model A `{path_a.name}`; "
-            f"video {v + 2}: Model B `{path_b.name}`."
-        )
-        v += 3
+    for i, (view_key, lpath) in enumerate(rows, start=1):
+        lines.append(f"**{view_key}** — video {i}: `{lpath.name}`")
     lines.append("")
     lines.append(
-        "When comparing variants, contrast video (k+1) vs (k+2) within the same triplet; "
-        "both follow the same control clip (k)."
+        "For each clip, judge whether bounding boxes, lane lines, and road boundaries "
+        "match the generated objects and road geometry, and whether anything appears in the "
+        "generated scene **without** a plausible control cue (spurious vehicles, etc.)."
     )
     return "\n".join(lines)
 
 
-def load_triplets(
+def resolve_layered_video(
+    layered_dir: Path,
+    view_key: str,
+    control_basename: str,
     cgv: Any,
     *,
-    control_dir: Path,
-    model_a_dir: Path,
-    model_b_dir: Path,
+    overlay_suffix: str,
+) -> Path:
+    """Like resolve_generated_video, but also tries ``{stem}{overlay_suffix}`` for each stem."""
+    control_stem = Path(control_basename).stem
+    stems = [f"auto_multiview_{view_key}"]
+    stems.extend(cgv.VIEW_OUTPUT_STEMS.get(view_key, [view_key]))
+    if control_stem not in stems:
+        stems.append(control_stem)
+    seen: set[str] = set()
+    unique_stems: list[str] = []
+    for s in stems:
+        if s not in seen:
+            seen.add(s)
+            unique_stems.append(s)
+
+    for stem in unique_stems:
+        name_variants = [stem]
+        if overlay_suffix:
+            name_variants.append(f"{stem}{overlay_suffix}")
+        for candidate in name_variants:
+            found = cgv.pick_video_in_dir(layered_dir, candidate)
+            if found is not None:
+                return found.resolve()
+
+    expected = f"auto_multiview_{view_key}".lower()
+    if layered_dir.is_dir():
+        for p in layered_dir.iterdir():
+            if not p.is_file() or p.suffix not in cgv.VIDEO_EXTENSIONS:
+                continue
+            st = p.stem.lower()
+            if st == expected:
+                return p.resolve()
+            if overlay_suffix and st == f"{expected}{overlay_suffix.lower()}":
+                return p.resolve()
+
+    present = cgv.list_video_basenames(layered_dir)
+    tried = unique_stems
+    if overlay_suffix:
+        tried = [f"{s} (+ {s}{overlay_suffix})" for s in unique_stems]
+    hint = (
+        f" Files in {layered_dir} with video extensions: {present}."
+        if present
+        else f" No video files found directly in {layered_dir} (non-recursive)."
+    )
+    raise FileNotFoundError(
+        f"No layered video in {layered_dir} for view {view_key!r}; "
+        f"tried stems {tried} with extensions {cgv.VIDEO_EXTENSIONS}.{hint}"
+    )
+
+
+def load_layered_rows(
+    cgv: Any,
+    *,
+    layered_dir: Path,
     auto_multiview_path: Path | None,
-) -> list[tuple[str, Path, Path, Path]]:
-    pairs_a = cgv.load_multiview_pairs(
-        control_dir=control_dir,
-        generated_dir=model_a_dir,
-        auto_multiview_path=auto_multiview_path,
-    )
-    pairs_b = cgv.load_multiview_pairs(
-        control_dir=control_dir,
-        generated_dir=model_b_dir,
-        auto_multiview_path=auto_multiview_path,
-    )
-    if len(pairs_a) != len(pairs_b):
-        raise ValueError("Model A and Model B multiview pair counts differ.")
-    rows: list[tuple[str, Path, Path, Path]] = []
-    for (vk_a, ctrl_a, gen_a), (vk_b, ctrl_b, gen_b) in zip(
-        pairs_a, pairs_b, strict=True
-    ):
-        if vk_a != vk_b:
-            raise ValueError(f"View order mismatch: {vk_a!r} vs {vk_b!r}")
-        if ctrl_a.resolve() != ctrl_b.resolve():
-            raise ValueError(f"Control path mismatch for view {vk_a!r}.")
-        rows.append((vk_a, ctrl_a, gen_a, gen_b))
+    overlay_suffix: str,
+) -> list[tuple[str, Path]]:
+    if auto_multiview_path is not None:
+        raw = json.loads(auto_multiview_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"Expected JSON object in {auto_multiview_path}")
+        spec = cgv.parse_auto_multiview_views(raw)
+    else:
+        spec = cgv.DEFAULT_MULTIVIEW
+
+    rows: list[tuple[str, Path]] = []
+    for view_key, control_name in spec:
+        layered = resolve_layered_video(
+            layered_dir,
+            view_key,
+            control_name,
+            cgv,
+            overlay_suffix=overlay_suffix,
+        )
+        rows.append((view_key, layered))
     return rows
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
-            "Critique and compare two Cosmos Transfer 2.5 multiview outputs (**Model A** vs **Model B**) "
-            "with Cosmos-Reason2 offline inference. Same layout as critique_generated_video.py "
-            "(seven control clips; each output dir with auto_multiview_<view>.mp4 or other known stems)."
+            "Score control-to-generated alignment from seven layered (control overlay + generated) "
+            "videos using Cosmos-Reason2 offline inference."
         )
     )
     p.add_argument(
-        "--control-dir",
+        "--layered-dir",
         type=Path,
         required=True,
-        help="Directory of seven control videos (same as Cosmos Transfer run).",
+        help=(
+            "Directory with seven layered videos per view. "
+            "Uses multiview stem rules plus optional overlay suffix (default _overlay), "
+            "e.g. FRONT_CENTER_overlay.mp4."
+        ),
     )
     p.add_argument(
-        "--model-a-dir",
-        type=Path,
-        required=True,
-        dest="model_a_dir",
-        help="Directory of seven generated videos for **Model A**.",
-    )
-    p.add_argument(
-        "--model-b-dir",
-        type=Path,
-        required=True,
-        dest="model_b_dir",
-        help="Directory of seven generated videos for **Model B**.",
+        "--overlay-suffix",
+        type=str,
+        default="_overlay",
+        help=(
+            "Append to each candidate basename before resolving (default: _overlay). "
+            "Use empty string for names without a suffix."
+        ),
     )
     p.add_argument(
         "--auto-multiview-json",
         type=Path,
         default=None,
-        help="Optional auto_multiview.json for view order and control basenames; can supply prompt via JSON.",
+        help="Optional auto_multiview.json for view order; may supply prompt via JSON.",
     )
     p.add_argument(
         "generation_prompt",
         type=str,
         nargs="?",
         default="",
-        help="Text prompt shared by both runs. Omit if using --prompt-file or JSON prompt.",
+        help="Text prompt used for generation. Omit if using --prompt-file or JSON prompt.",
     )
     p.add_argument(
         "--prompt-file",
         type=Path,
         default=None,
-        help="UTF-8 file with the shared generation prompt.",
+        help="UTF-8 file with the generation prompt.",
     )
     p.add_argument(
         "--notes",
         type=str,
         default="",
-        help="Optional extra context appended to the prompt (e.g. checkpoint ids).",
+        help="Optional extra context (e.g. overlay recipe, checkpoint id).",
     )
     p.add_argument(
         "--notes-file",
@@ -236,10 +277,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         metavar="PATH",
-        help=(
-            "Write only the Assistant markdown to this file (no echoed system/user prompt or separators); "
-            "the full log still prints to stdout."
-        ),
+        help="Write only the Assistant markdown to this file.",
     )
     return p.parse_args()
 
@@ -280,7 +318,7 @@ def main() -> None:
         generation_prompt = json_prompt
     else:
         print(
-            "Provide the shared generation prompt (positional, --prompt-file, or prompt in JSON).",
+            "Provide the generation prompt (positional, --prompt-file, or prompt in JSON).",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -300,32 +338,24 @@ def main() -> None:
     if notes.strip():
         optional_notes = "**Additional operator notes:**\n" + notes.strip()
 
-    cdir = args.control_dir.expanduser().resolve()
-    dir_a = args.model_a_dir.expanduser().resolve()
-    dir_b = args.model_b_dir.expanduser().resolve()
-    for name, d in (
-        ("--control-dir", cdir),
-        ("--model-a-dir", dir_a),
-        ("--model-b-dir", dir_b),
-    ):
-        if not d.is_dir():
-            print(f"{name} is not a directory: {d}", file=sys.stderr)
-            sys.exit(1)
+    layered_dir = args.layered_dir.expanduser().resolve()
+    if not layered_dir.is_dir():
+        print(f"--layered-dir is not a directory: {layered_dir}", file=sys.stderr)
+        sys.exit(1)
 
     cgv = _load_critique_generated_video()
     try:
-        rows = load_triplets(
+        rows = load_layered_rows(
             cgv,
-            control_dir=cdir,
-            model_a_dir=dir_a,
-            model_b_dir=dir_b,
+            layered_dir=layered_dir,
             auto_multiview_path=auto_path,
+            overlay_suffix=args.overlay_suffix,
         )
     except (FileNotFoundError, ValueError, OSError) as e:
-        print(f"Failed to resolve videos: {e}", file=sys.stderr)
+        print(f"Failed to resolve layered videos: {e}", file=sys.stderr)
         sys.exit(1)
 
-    media_layout = build_media_layout_triplets(rows)
+    media_layout = build_media_layout_layered(rows)
     user_prompt = load_user_prompt(
         template,
         generation_prompt=generation_prompt,
@@ -333,9 +363,7 @@ def main() -> None:
         optional_notes=optional_notes,
     )
 
-    videos: list[Path] = []
-    for _, ctrl, vid_a, vid_b in rows:
-        videos.extend([ctrl, vid_a, vid_b])
+    videos = [lpath for _, lpath in rows]
 
     tmp_yaml = write_prompt_file(user_prompt)
     try:

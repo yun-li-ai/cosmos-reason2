@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Filled by scripts/critique_layered_control_alignment.py (string.Template).
+user_prompt: |
+  You are evaluating **control-to-generated alignment** for **Cosmos Transfer** (or similar) **multiview** outputs.
+
+  Each attached video is a **single composite**: the **control visualization** (bounding boxes, lane lines, road boundaries, map-style cues) is **layered or blended** with the **generated photorealistic video** for one camera. The **same text prompt** was used for all views.
+
+  **Generation prompt:**
+  $generation_prompt
+
+  **Video order (one clip per camera):**
+  $media_layout
+
+  $optional_notes
+
+  Your job is to judge how well the **generated scene** matches the **control semantics** visible in the overlay—not artistic quality alone.
+
+  ## What to assess
+  - **Bounding boxes:** When a box appears on a region, does the generated content show a **plausible corresponding object** (class, scale, approximate position)? Misaligned boxes, wrong object class, or “floating” boxes with no object are defects.
+  - **Lane lines and road boundaries:** Do painted lanes, curb lines, and road edges **line up** with the generated pavement/geometry? Drift, wrong lane topology, or ignored boundaries are defects.
+  - **Absence / hallucinations:** If the control shows **no** box (or no lane object) in an area but the generated video shows a **vehicle, pedestrian, or major obstacle** that appears to contradict “no control cue there,” treat that as **spurious content** (alignment failure). Conversely, missing vehicles where boxes clearly indicate them is also a failure.
+  - **Temporal stability:** Does alignment hold over time (tracking), or do objects slip relative to boxes/lanes frame-to-frame?
+
+  ## Report structure (markdown)
+  Use these headings in order:
+
+  ### Summary
+  2–4 sentences on overall alignment quality across all seven views.
+
+  ### Per-camera notes
+  For **each** camera view (use the view names from the layout), short bullets: strongest matches, clearest misalignments, and any spurious or missing objects relative to control cues.
+
+  ### Cross-camera consistency
+  Whether the seven views feel like **one consistent world** relative to the controls (e.g. same traffic story, no contradictory hallucinations across views).
+
+  ### Alignment score
+  Give **one** overall integer **alignment score from 0 to 100**, where:
+  - **90–100:** Excellent—boxes/lanes consistently match objects and road structure; few or no spurious objects; minor nitpicks only.
+  - **70–89:** Good—mostly aligned; some localized drift, occasional spurious or missing objects.
+  - **50–69:** Mixed—frequent misalignment or several spurious/missing instances; still some usable structure.
+  - **30–49:** Poor—control cues often disagree with the generated scene.
+  - **0–29:** Very poor—overlay and generated content largely unrelated or systematically wrong.
+
+  On the line immediately after the heading, print exactly: `Score: <integer>/100` (e.g. `Score: 72/100`), then a short paragraph explaining the main reasons for that score.
+
+  Be specific; reference **filenames** and **view keys** where useful. Avoid generic praise if the alignment is weak.

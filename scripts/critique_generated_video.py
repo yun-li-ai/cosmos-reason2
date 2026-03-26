@@ -14,7 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Run Cosmos-Reason2 offline critique on Cosmos Transfer outputs (multiview control + generated)."""
+"""Run Cosmos-Reason2 offline critique on Cosmos Transfer outputs (multiview control + generated).
+python scripts/critique_generated_video.py  \
+ --control-dir assets/inference_results/control_videos   \
+ --generated-dir assets/inference_results/a_trained_golden_hour   \
+ --auto-multiview-json assets/inference_results/a_trained_golden_hour/auto_multiview.json   \
+ --output assets/inference_results/single/single_a_golden_hour.md   
+"""
 
 from __future__ import annotations
 

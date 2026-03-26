@@ -31,7 +31,9 @@ user_prompt: |
   How well do the generated outputs match the generation prompt across cameras? Note missing elements, wrong attributes, or contradictions.
 
   ## Control fidelity
-  When control videos are provided: for each camera, compare the generated clip to its paired control stream (boxes, lanes, layout). Is geometry and motion consistent with the controls? Are there cross-camera inconsistencies? If only a single output video was supplied without controls, say so briefly and focus on internal consistency.
+  When control videos are provided: for each camera, compare the generated clip to its paired control stream (boxes, lanes, layout). Is geometry and motion consistent with the controls? Are there cross-camera inconsistencies? If only a single output video was supplied without controls, say so briefly and focus on internal consistency. 
+  Give a value score for each camera based on how well the generated clip matches the control stream.
+  The score should be a number between 0 and 100, where 100 is the best match.
 
   ## Temporal quality
   Flicker, object identity drift, unnatural motion, physics or interaction plausibility across time (per view and overall).
